@@ -1,0 +1,233 @@
+ Skip to content
+
+    Explore
+    Gist
+    Blog
+    Help
+
+    Tomasz Bartczak kretes
+
+    371
+    1,476
+    323
+
+public twitter/scalding
+
+    Home
+    Pages
+    History
+
+Getting Started
+Contents
+Getting help
+
+    Cascading Google Group
+    @Scalding on Twitter
+    Frequently Asked Questions
+
+Documentation
+
+    Scaladocs
+    Getting Started
+    Fields-based API Reference
+        Field Rules
+    Type-safe API Reference
+    Building Bigger Platforms With Scalding
+    Scalding Sources
+    Scalding-Commons
+    Rosetta Code
+    Oscar's Scalding Talk at the Big Data Scala Meetup
+
+Matrix API
+
+    Getting Started with the Matrix library
+    Matrix-API-Reference
+
+Third Party Modules
+
+    Scalding-cassandra
+    Spy Glass
+
+Videos
+
+    Scalding: Powerful & Concise MapReduce Programming
+    Scalding lecture for UC Berkeley's Analyzing Big Data with Twitter class
+
+How-tos
+
+    Scalding with CDH3U2 in a Maven project
+    Running your Scalding jobs in Eclipse
+    Running your Scalding jobs in IDEA intellij
+    Running Scalding jobs on EMR
+    Running Scalding with HBase support: Scalding HBase wiki
+    Using the distributed cache
+    Unit Testing Scalding Jobs
+
+Tutorials
+
+    Scalding for the impatient
+    Movie Recommendations and more in MapReduce and Scalding
+    Generating Recommendations with MapReduce and Scalding
+    Poker collusion detection with Mahout and Scalding
+    Portfolio Management in Scalding
+    Find the Fastest Growing County in US, 1969-2011, using Scalding
+    Mod-4 matrix arithmetic with Scalding and Algebird
+    Dean Wampler's Scalding Workshop
+    Typesafe's Activator for Scalding
+
+Articles
+
+    Hive, Pig, Scalding, Scoobi, Scrunch and Spark: A Comparison of Hadoop Frameworks
+    Why Hadoop MapReduce needs Scala
+    How Twitter is doing its part to democratize big data
+    Meet the combo powering Hadoop at Etsy, Airbnb and Climate Corp.
+    Scalding wins a Bossie award from InfoWorld
+
+Other
+
+    Using Scalding with other versions of Scala
+    Scala and sbt for Homebrew users
+    Scala and sbt for MacPorts users
+    Comparison to Scrunch and Scoobi
+    Powered-By
+
+Preliminaries
+
+To get started with Scalding, first clone the Scalding repository on Github:
+
+git clone https://github.com/twitter/scalding.git
+
+Next, build the code using sbt (a standard Scala build tool). Make sure you have Scala (download here, see scalaVersion in project/Build.scala for the correct version to download), and run the following commands:
+
+./sbt update
+./sbt test     # runs the tests; if you do 'sbt assembly' below, these tests, which are long, are repeated
+./sbt assembly # creates a fat jar with all dependencies, which is useful when using the scald.rb script
+
+Now you're good to go!
+Using Scalding with other versions of Scala
+
+Scalding works with Scala 2.8.1, 2.9.1, 2.9.2, and 2.9.3, though a few configuration files must be changed for this to work. In project/Build.scala, ensure that the proper scalaVersion value is set. Additionally, you'll need to ensure the proper version of specs in the same config. Change the following line
+
+libraryDependencies += "org.scala-tools.testing" % "specs_2.9.1" % "1.6.9" % "test"
+
+to correspond to the proper version of scala (_2.9.1 should work with scala 2.9.2). You can find the published versions here.
+IDE Support
+
+Scala's IDE support is generally not as strong as Java's, but there are several options that some people prefer. Both Eclipse and IntelliJ have plugins that support Scala syntax. To generate a project file for Scalding in Eclipse, refer to this project, and for IntelliJ files, this (note that with the latter, the 1.1 snapshot is recommended).
+WordCount in Scalding
+
+Let's look at a simple WordCount job.
+
+import com.twitter.scalding._
+
+class WordCountJob(args : Args) extends Job(args) {
+  TextLine( args("input") )
+    .flatMap('line -> 'word) { line : String => line.split("""\s+""") }
+    .groupBy('word) { _.size }
+    .write( Tsv( args("output") ) )
+}
+
+This job reads in a file, emits every word in a line, counts the occurrences of each word, and writes these word-count pairs to a tab-separated file.
+
+To run the job, copy the source code above into a WordCountJob.scala file, create a file named someInputfile.txt containing some arbitrary text, and then enter the following command from the root of the Scalding repository:
+
+scripts/scald.rb --local WordCountJob.scala --input someInputfile.txt --output ./someOutputFile.tsv
+
+This runs the WordCount job in local mode (i.e., not on a Hadoop cluster). After a few seconds, your first Scalding job should be done!
+Alternative using Leiningen
+
+If you're averse to SBT and scripts/scald.rb, https://github.com/masverba/scalding-on-leiningen provides a complete, runnable example of this WordCount job, built using Leiningen.
+WordCount dissection
+
+Let's take a closer look at the job.
+TextLine
+
+TextLine is an example of a Scalding source that reads each line of a file into a field named line.
+
+TextLine(args("input")) // args("input") contains a filename to read from
+
+Another common source is a Tsv source that reads tab-delimited files. You can also create sources that read directly from LZO-compressed files on HDFS (possibly containing Protobuf- or Thrift-encoded objects!), or even database sources that read directly from a MySQL table.
+flatMap
+
+flatMap is an example of a function that you can apply to a stream of tuples.
+
+TextLine(args("input"))
+  // flat map the "line" field to a new "word" field
+  .flatMap('line -> 'word) { line : String => line.split("""\s+""") }
+
+First, we specify the name of the field we want to flatMap over (line, in this case), as well as the name of the additional output field (word). We then pass in a function that describes how to flat map over these fields (here, we split each line into individual words).
+
+Our tuple stream now contains something like the following:
+
+this is a line    this
+this is a line    is
+this is a line    a
+this is a line    line
+...
+
+See the API Reference for more examples of flatMap (including how to flat map from and to multiple fields), as well as examples of other functions you can apply to a tuple stream.
+groupBy
+
+Next, we group the same words together, and count the size of each group.
+
+TextLine(args("input"))
+  .read
+  .flatMap('line -> 'word) { line : String => line.split("""\s+""") }
+  .groupBy('word) { _.size } // equivalent to .groupBy('word) { group => group.size }
+
+Here, we group the tuple stream into groups of tuples with the same word, and then add a new field with the size of each group. By default, the new field is simply called size, but we can also specify the name via _.size('numWords).
+
+The tuple stream now looks like:
+
+hello    5
+world    3
+this     1
+...
+
+Again, see the API Reference for more examples of grouping functions.
+write, Tsv
+
+Finally, just as we read from a TextLine source, we can also output our computations to a Tsv source.
+
+TextLine(args("input"))
+  .flatMap('line -> 'word) { line : String => line.split("""\s+""") }
+  .groupBy('word) { _.size }
+  .write(Tsv(args("output")))
+
+scald.rb
+
+The scald.rb script in the scripts/ directory is a handy script that makes it easy to run jobs in both local mode or on a remote Hadoop cluster. It handles simple command-line parsing, and copies over necessary JAR files when running remote jobs.
+
+If you're running many Scalding jobs, it can be useful to add scald.rb to your path, so that you don't need to provide the absolute pathname every time. One way of doing this is via (something like):
+
+ln -s scripts/scald.rb $HOME/bin/
+
+This creates a symlink to the scald.rb script in your $HOME/bin/ directory (which should already be included in your PATH).
+
+See scald.rb for more information, including instructions on how to set up the script to run jobs remotely.
+
+For an alternative based on Leiningen, see https://github.com/masverba/scalding-on-leiningen.
+Next Steps
+
+You now know the basics of Scalding! To learn more, check out the following resources:
+
+    tutorial/: this folder contains an introductory series of runnable jobs.
+    API Reference: includes code snippets explaining different kinds of Scalding functions (e.g., map, filter, project, groupBy, join) and much more.
+    Matrix API Reference: the API reference for the Type-safe Matrix library
+    Cookbook: Short recipes for common tasks.
+
+Last edited by xinhhuynh, 3 months ago
+
+    Status
+    API
+    Training
+    Shop
+    Blog
+    About
+
+    © 2014 GitHub, Inc.
+    Terms
+    Privacy
+    Security
+    Contact
+
